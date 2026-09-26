@@ -1,0 +1,61 @@
+{
+  "dataset": {
+    "name": "UCI Default of Credit Card Clients",
+    "rows": 30000,
+    "default_rate": 0.2212,
+    "features": 26,
+    "test_rows": 6000
+  },
+  "models": {
+    "Logistic Regression": {
+      "test_auc": 0.7514,
+      "gini": 0.5029,
+      "ks": 0.3883,
+      "pr_auc": 0.5154,
+      "cv_auc_mean": 0.7698,
+      "cv_auc_std": 0.0039
+    },
+    "XGBoost": {
+      "test_auc": 0.7805,
+      "gini": 0.5611,
+      "ks": 0.4374,
+      "pr_auc": 0.5665,
+      "cv_auc_mean": 0.7876,
+      "cv_auc_std": 0.0053
+    }
+  },
+  "best_model": "XGBoost",
+  "baseline_model": "Logistic Regression",
+  "ranking": {
+    "top10_capture": 0.3173,
+    "top20_capture": 0.5064,
+    "top_decile_default_rate": 0.7017
+  },
+  "threshold": {
+    "assumptions": {
+      "loss_avoided_share": 0.3,
+      "margin_lost_share": 0.1
+    },
+    "optimal": 0.26,
+    "flagged": 1563,
+    "defaulters_caught": 791,
+    "net_value_ntd": 8771203.9,
+    "at_0_5": {
+      "flagged": 736,
+      "defaulters_caught": 492,
+      "net_value_ntd": 7997607.799999999
+    }
+  },
+  "top_features_shap": {
+    "delay_max": 0.30897998809814453,
+    "delay_last": 0.27814000844955444,
+    "pay_amt_mean": 0.17776000499725342,
+    "limit_bal": 0.1326099932193756,
+    "delay_mean": 0.11881999671459198,
+    "pay_status_1": 0.09606000036001205,
+    "zero_pay_months": 0.08609999716281891,
+    "util_last": 0.08602999895811081,
+    "util_trend": 0.07980000227689743,
+    "bill_growth": 0.06395000219345093
+  }
+}
