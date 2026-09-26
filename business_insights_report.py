@@ -107,7 +107,8 @@ def main():
         f"the riskiest 20% catches **{rk['top20_capture']:.0%}**.",
         "",
         "## Recommended action threshold",
-        f"- Act on customers with predicted default probability ≥ **{th['optimal']:.2f}**: "
+        f"- Act on customers with predicted default probability ≥ **{th['optimal']:.2f}** (chosen on training "
+        f"data; results below are on the test set): "
         f"{th['flagged']:,} customers flagged, {th['defaulters_caught']:,} actual defaulters caught.",
         f"- Net loss avoided: **NT${th['net_value_ntd']/1e6:.2f} million**, versus "
         f"NT${th['at_0_5']['net_value_ntd']/1e6:.2f} million with the default 0.50 cut-off "
@@ -116,7 +117,7 @@ def main():
         f"wrongly restricting a good customer loses {a['margin_lost_share']:.0%} of their balance in "
         f"margin. With these costs the break-even probability is "
         f"{a['margin_lost_share']/(a['loss_avoided_share']+a['margin_lost_share']):.2f}, which is "
-        "close to the threshold the search found.",
+        "close to the threshold chosen on the training data.",
         "",
         "## Why customers get flagged",
         "Most common reason codes among flagged customers (top 3 SHAP drivers per customer):",

@@ -10,9 +10,9 @@ Pipeline:
   1. Load & clean          fix undocumented category codes, rename PAY_0 -> PAY_1
   2. Feature engineering   6-month behavioural history -> delinquency, utilisation,
                            repayment-ratio and trend features
-  3. Models                Logistic Regression (scorecard-style baseline) vs XGBoost
+  3. Models                Logistic Regression baseline vs XGBoost, best chosen by CV AUC
   4. Evaluation            ROC-AUC, Gini, KS, PR-AUC, 5-fold CV, top-decile capture
-  5. Decision threshold    chosen to minimise expected credit loss, not at 0.5
+  5. Decision threshold    chosen on training folds to minimise expected credit loss
   6. Explainability        per-customer SHAP reason codes (XGBoost TreeSHAP)
   7. Artefacts             models/, reports/metrics.json, reports/scored_test_customers.csv
 
@@ -25,7 +25,8 @@ import numpy as np
 import pandas as pd
 import xgboost as xgb
 import joblib
-from sklearn.model_selection import train_test_split, StratifiedKFold, cross_val_score
+from sklearn.model_selection import train_test_split, StratifiedKFold, cross_val_score, cross_val_predict
+from sklearn.base import clone
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import Pipeline
@@ -46,7 +47,7 @@ LOSS_AVOIDED_SHARE = 0.30   # share of a defaulter's balance saved by early acti
 MARGIN_LOST_SHARE  = 0.10   # share of a good customer's balance lost as a year of interest
                             # and fees when they are wrongly restricted and leave
 
-MONTHS = range(1, 7)
+MONTHS = range(1, 7)        # 1 = September 2005 (most recent) ... 6 = April 2005
 
 # Plain-English reason codes, as a lender would show them to a credit officer
 REASON_TEXT = {
@@ -60,7 +61,7 @@ REASON_TEXT = {
     "pay_amt_mean": "Low repayment amounts", "bill_growth": "Balance growing fast",
     "limit_bal": "Low credit limit", "age": "Age", "education": "Education", "married": "Marital status",
     **{f"pay_status_{k}": f"Repayment status {k} month(s) ago" for k in range(1, 7)},
-}        # 1 = September 2005 (most recent) ... 6 = April 2005
+}
 
 
 # ============================================================================
@@ -113,7 +114,7 @@ def engineer_features(df):
     ratio = paid[:, :5] / np.where(bill[:, 1:] > 0, bill[:, 1:], np.nan)
     ratio = np.clip(ratio, 0, 2)
     f["pay_ratio_last"]    = np.nan_to_num(ratio[:, 0], nan=1.0)
-    f["pay_ratio_mean"]    = np.nan_to_num(np.nanmean(np.where(np.isnan(ratio), np.nan, ratio), axis=1), nan=1.0)
+    f["pay_ratio_mean"]    = np.nan_to_num(np.nanmean(ratio, axis=1), nan=1.0)
     f["zero_pay_months"]   = ((paid == 0) & (np.hstack([bill[:, 1:], bill[:, -1:]]) > 0)).sum(axis=1)
     f["pay_amt_mean"]      = paid.mean(axis=1)
     f["bill_growth"]       = (bill[:, 0] - bill[:, 5]) / limit[:, 0]
@@ -177,11 +178,13 @@ def main():
         print(f"  {name:<20} AUC={auc:.4f}  Gini={2*auc-1:.3f}  KS={results[name]['ks']:.3f}  "
               f"CV AUC={cv_auc.mean():.4f} +/- {cv_auc.std():.4f}")
 
-    BEST, BASE = "XGBoost", "Logistic Regression"
+    BASE = "Logistic Regression"
+    BEST = max(results, key=lambda n: results[n]["cv_auc_mean"])   # chosen on training CV only
+    print(f"\n  Selected model (by CV AUC): {BEST}")
     best = results[BEST]
     prob = best["prob"]
     yt = y_test.to_numpy()
-    joblib.dump(models[BEST], "models/xgboost_default_model.pkl")
+    joblib.dump(models[BEST], "models/best_default_model.pkl")
     joblib.dump(models[BASE], "models/logistic_baseline.pkl")
 
     # ------------------------------------------------------------------------
@@ -200,18 +203,23 @@ def main():
     # ------------------------------------------------------------------------
     # 5. LOSS-MINIMISING THRESHOLD
     # ------------------------------------------------------------------------
-    def net_value(t):
-        flag = prob >= t
-        saved = (LOSS_AVOIDED_SHARE * exposure_test[flag & (yt == 1)]).sum()
-        cost = (MARGIN_LOST_SHARE * exposure_test[flag & (yt == 0)]).sum()
-        return saved - cost, int(flag.sum()), int((flag & (yt == 1)).sum())
+    def net_value(t, p=prob, y=yt, exposure=exposure_test):
+        flag = p >= t
+        saved = (LOSS_AVOIDED_SHARE * exposure[flag & (y == 1)]).sum()
+        cost = (MARGIN_LOST_SHARE * exposure[flag & (y == 0)]).sum()
+        return saved - cost, int(flag.sum()), int((flag & (y == 1)).sum())
 
+    # Pick the threshold on out-of-fold predictions for the TRAINING set; the test
+    # set is only used to report the result.
+    oof = cross_val_predict(clone(models[BEST]), X_train, y_train, cv=cv, method="predict_proba")[:, 1]
+    exposure_train = df.loc[X_train.index, "BILL_AMT1"].clip(lower=0).to_numpy()
     grid = np.round(np.arange(0.05, 0.96, 0.01), 2)
-    curve = [(t, *net_value(t)) for t in grid]
-    t_opt, v_opt, n_opt, tp_opt = max(curve, key=lambda r: r[1])
+    t_opt = max(grid, key=lambda t: net_value(t, oof, y_train.to_numpy(), exposure_train)[0])
+    curve = [(t, *net_value(t)) for t in grid]          # test set, for reporting
+    v_opt, n_opt, tp_opt = net_value(t_opt)
     v_05, n_05, tp_05 = net_value(0.5)
     print(f"\n  Top 10% riskiest hold {capture(0.1):.1%} of defaults; top 20% hold {capture(0.2):.1%}")
-    print(f"  Loss-minimising threshold {t_opt:.2f}: flag {n_opt} customers, catch {tp_opt} defaulters, "
+    print(f"  Loss-minimising threshold (chosen on training folds) {t_opt:.2f}: test set: flag {n_opt} customers, catch {tp_opt} defaulters, "
           f"net NT${v_opt:,.0f} (vs NT${v_05:,.0f} at 0.50)")
 
     # ------------------------------------------------------------------------
@@ -261,7 +269,7 @@ def main():
                     "top_decile_default_rate": round(float(decile_table["default_rate"].iloc[0]), 4)},
         "threshold": {"assumptions": {"loss_avoided_share": LOSS_AVOIDED_SHARE,
                                       "margin_lost_share": MARGIN_LOST_SHARE},
-                      "optimal": float(t_opt), "flagged": n_opt, "defaulters_caught": tp_opt,
+                      "optimal": float(t_opt), "chosen_on": "out-of-fold predictions on the training set", "flagged": n_opt, "defaulters_caught": tp_opt,
                       "net_value_ntd": float(v_opt),
                       "at_0_5": {"flagged": n_05, "defaulters_caught": tp_05, "net_value_ntd": float(v_05)}},
         "top_features_shap": shap_importance.head(10).round(5).to_dict(),

@@ -36,10 +36,11 @@
       "loss_avoided_share": 0.3,
       "margin_lost_share": 0.1
     },
-    "optimal": 0.26,
-    "flagged": 1563,
-    "defaulters_caught": 791,
-    "net_value_ntd": 8771203.9,
+    "optimal": 0.29,
+    "chosen_on": "out-of-fold predictions on the training set",
+    "flagged": 1409,
+    "defaulters_caught": 750,
+    "net_value_ntd": 8617781.4,
     "at_0_5": {
       "flagged": 736,
       "defaulters_caught": 492,

@@ -14,20 +14,20 @@ XGBoost improves Gini by **+0.058** over the Logistic Regression baseline.
 - Reviewing the riskiest 10% catches **32%** of all defaulters; the riskiest 20% catches **51%**.
 
 ## Recommended action threshold
-- Act on customers with predicted default probability ≥ **0.26**: 1,563 customers flagged, 791 actual defaulters caught.
-- Net loss avoided: **NT$8.77 million**, versus NT$8.00 million with the default 0.50 cut-off (492 defaulters caught).
-- Assumptions: early action saves 30% of a defaulter's balance; wrongly restricting a good customer loses 10% of their balance in margin. With these costs the break-even probability is 0.25, which is close to the threshold the search found.
+- Act on customers with predicted default probability ≥ **0.29** (chosen on training data; results below are on the test set): 1,409 customers flagged, 750 actual defaulters caught.
+- Net loss avoided: **NT$8.62 million**, versus NT$8.00 million with the default 0.50 cut-off (492 defaulters caught).
+- Assumptions: early action saves 30% of a defaulter's balance; wrongly restricting a good customer loses 10% of their balance in margin. With these costs the break-even probability is 0.25, which is close to the threshold chosen on the training data.
 
 ## Why customers get flagged
 Most common reason codes among flagged customers (top 3 SHAP drivers per customer):
 
 | Reason | Flagged customers |
 |---|---|
-| Serious past delinquency | 1,269 |
-| Frequently late | 696 |
+| Serious past delinquency | 1,200 |
+| Frequently late | 677 |
 | Payment late last month | 634 |
-| Low repayment amounts | 411 |
-| Low credit limit | 275 |
+| Low repayment amounts | 324 |
+| Repayment status 1 month(s) ago | 261 |
 
 ## Limits
 - Data is from one Taiwanese bank in 2005; a model for another market must be retrained.
